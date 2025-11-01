@@ -1,0 +1,327 @@
+# GitHub Copilot Agent Prompt for Multi-Entity Query System
+
+## Project Requirements
+
+Create a Streamlit-based multi-entity query system that supports querying different types of data (Applications, Products, Programs) from separate API endpoints.
+
+### Core Functionality
+
+1. **Multi-API Integration**: Support multiple REST API endpoints with different data structures:
+
+**Application API** - `/api/applications`:
+```json
+{
+  "appId": "APP-1023",
+  "appName": "Customer Relationship Portal",
+  "architectName": "Rakesh Nanda",
+  "domainDetails": {
+    "domainName": "Banking",
+    "subDomain": "Retail Lending",
+    "businessOwner": "Anita Sharma",
+    "criticality": "High",
+    "lastAuditDate": "2025-09-15",
+    "technologiesUsed": ["Spring Boot", "React", "PostgreSQL", "Kafka"]
+  }
+}
+```
+
+**Product API** - `/api/products`:
+```json
+{
+  "productId": "PROD-2045",
+  "productName": "Digital Banking Suite",
+  "productManager": "Vijay Kumar",
+  "productDetails": {
+    "category": "Financial Services",
+    "version": "3.2.1",
+    "releaseDate": "2025-08-10",
+    "status": "Active",
+    "pricing": {
+      "model": "Subscription",
+      "tier": "Enterprise"
+    },
+    "features": ["Multi-currency", "Real-time transactions", "API Integration"]
+  }
+}
+```
+
+**Program API** - `/api/programs`:
+```json
+{
+  "programId": "PROG-5012",
+  "programName": "Digital Transformation Initiative",
+  "programManager": "Sanjay Reddy",
+  "programDetails": {
+    "department": "IT",
+    "budget": "5000000",
+    "startDate": "2025-01-15",
+    "endDate": "2026-12-31",
+    "priority": "Critical",
+    "status": "In Progress",
+    "milestones": ["Phase 1", "Phase 2", "Phase 3"],
+    "stakeholders": ["CEO", "CTO", "CFO"]
+  }
+}
+```
+
+2. **Dynamic Entity Selection**:
+   - Provide a dropdown/radio button to select entity type (Application, Product, Program)
+   - Load appropriate API endpoint based on selection
+   - Store API configurations in a dictionary:
+     ```python
+     API_CONFIGS = {
+         "Applications": {
+             "endpoint": "/api/applications",
+             "id_field": "appId",
+             "name_field": "appName"
+         },
+         "Products": {
+             "endpoint": "/api/products",
+             "id_field": "productId",
+             "name_field": "productName"
+         },
+         "Programs": {
+             "endpoint": "/api/programs",
+             "id_field": "programId",
+             "name_field": "programName"
+         }
+     }
+     ```
+
+3. **Dynamic Data Processing**:
+   - Create separate flattening functions for each entity type
+   - Detect entity type and apply appropriate flattening logic
+   - Handle nested structures differently for each entity:
+     - **Applications**: Flatten domainDetails, join technologiesUsed array
+     - **Products**: Flatten productDetails and pricing, join features array
+     - **Programs**: Flatten programDetails, join milestones and stakeholders arrays
+   - Cache DataFrames separately for each entity type
+
+4. **Context-Aware Natural Language Query**:
+   - User first selects entity type (Application/Product/Program)
+   - Query interface adapts based on selected entity
+   - OpenAI receives entity-specific context including:
+     - DataFrame schema for that entity
+     - Sample data (2-3 rows)
+     - Entity-specific column names and data types
+     - Entity-specific example queries
+
+5. **Dynamic LLM Prompt Generation**:
+   - System prompt should be dynamically generated based on selected entity
+   - Include entity-specific schema and examples
+   - Template structure:
+     ```
+     You are filtering {entity_type} data.
+     Available columns: {columns}
+     Sample data: {sample_rows}
+     Entity-specific rules: {entity_rules}
+     ```
+   - Entity-specific filtering examples for each type
+
+6. **Filter Execution**:
+   - Execute filter on the currently selected entity's DataFrame
+   - Display results specific to that entity type
+   - Show entity-appropriate metrics (e.g., for Applications: total apps, domains; for Products: total products, categories)
+
+7. **User Interface** (Streamlit):
+   
+   **Sidebar**:
+   - **Entity Selector**: Radio buttons or dropdown for "Applications", "Products", "Programs"
+   - **API Configuration Section**:
+     - Base URL input
+     - Toggle for using sample data vs live API
+     - Refresh data button
+   - **Entity Info Panel**: Show currently loaded entity stats
+
+   **Main Area**:
+   - **Header**: Dynamic title based on selected entity (e.g., "🔍 Application Query System")
+   - **Metrics Row**: Entity-specific metrics (3-4 key metrics per entity type)
+   - **Query Interface**:
+     - Text input for natural language queries
+     - **Dynamic Example Queries** based on selected entity:
+       - Applications: "Show me all high criticality applications in Banking"
+       - Products: "Find all active products in Financial Services category"
+       - Programs: "Show critical priority programs with budget over 1 million"
+   - **Results Display**:
+     - Entity-specific result message
+     - Interactive DataFrame with entity-specific columns
+     - Generated filter code (expandable)
+     - CSV download with entity-specific filename
+   - **View All Data**: Expandable section for complete dataset
+
+8. **Sample Data for Each Entity**:
+
+   **Applications (4 records)**:
+   - Banking domain: 2 apps (High, Critical criticality)
+   - Insurance domain: 1 app (Medium criticality)
+   - Retail domain: 1 app (Low criticality)
+
+   **Products (4 records)**:
+   - Financial Services: 2 products (Active, Beta status)
+   - Healthcare: 1 product (Active status)
+   - E-commerce: 1 product (Deprecated status)
+
+   **Programs (4 records)**:
+   - IT department: 2 programs (Critical, High priority)
+   - Operations: 1 program (Medium priority)
+   - Marketing: 1 program (Low priority)
+
+### Technical Requirements
+
+**Dependencies**:
+- streamlit
+- pandas
+- openai (latest version with OpenAI() client)
+- requests
+- typing (for type hints)
+- json
+
+**Architecture Pattern**:
+- Use factory pattern or strategy pattern for entity-specific processing
+- Create base class or functions for common operations
+- Implement entity-specific handlers for:
+  - Data flattening
+  - Metrics calculation
+  - Example query generation
+  - Schema description
+
+**State Management**:
+- Store selected entity in session state
+- Cache DataFrame separately for each entity type using entity name as cache key
+- Clear relevant cache when entity selection changes
+- Persist user's last selected entity
+
+**OpenAI Configuration**:
+- Dynamically build system prompt based on selected entity
+- Include entity type in prompt context
+- Use gpt-4o-mini model with temperature=0.1
+- Set max_tokens=500 for filter generation
+
+**Error Handling**:
+- Handle entity-specific API failures
+- Validate entity selection before queries
+- Handle missing or malformed entity data
+- Show entity-appropriate error messages
+
+**Code Organization**:
+```python
+# Suggested structure
+class EntityProcessor:
+    def flatten_data(self, json_data: List[Dict]) -> pd.DataFrame
+    def get_metrics(self, df: pd.DataFrame) -> Dict
+    def get_example_queries(self) -> List[str]
+    def get_schema_description(self, df: pd.DataFrame) -> str
+
+class ApplicationProcessor(EntityProcessor):
+    # Application-specific implementations
+
+class ProductProcessor(EntityProcessor):
+    # Product-specific implementations
+
+class ProgramProcessor(EntityProcessor):
+    # Program-specific implementations
+```
+
+### Entity-Specific Query Examples
+
+**Applications**:
+- "Show me all applications in Banking domain"
+- "Find critical applications"
+- "Which apps use React?"
+- "Show high criticality apps owned by Anita Sharma"
+- "Applications audited after August 2025"
+
+**Products**:
+- "Show all active products in Financial Services"
+- "Find products with Enterprise tier pricing"
+- "Which products have API Integration feature?"
+- "Show products released in 2025"
+- "Products managed by Vijay Kumar"
+
+**Programs**:
+- "Show critical priority programs"
+- "Find programs in IT department"
+- "Which programs have budget over 2 million?"
+- "Show in-progress programs starting in 2025"
+- "Programs with CEO as stakeholder"
+
+### UI Behavior
+
+1. **On Entity Selection Change**:
+   - Update page title and header
+   - Load/fetch data for selected entity
+   - Update metrics display
+   - Update example queries
+   - Clear previous query results
+
+2. **On Query Submission**:
+   - Show entity type in processing message
+   - Generate entity-specific filter code
+   - Apply filter to correct DataFrame
+   - Display entity-appropriate results
+
+3. **Visual Indicators**:
+   - Use different emoji/icon for each entity type
+   - Color-code metrics by entity
+   - Show entity name in all result messages
+
+### File Structure
+```
+project/
+├── app.py (main Streamlit application)
+├── entity_processors.py (entity-specific processing classes)
+├── requirements.txt
+├── .streamlit/
+│   └── secrets.toml (for API key)
+├── README.md (setup instructions)
+└── sample_data/
+    ├── applications.json
+    ├── products.json
+    └── programs.json
+```
+
+### Additional Requirements
+
+- **Extensibility**: Design system to easily add new entity types
+- **Validation**: Validate entity selection before any operation
+- **Caching**: Implement smart caching per entity type
+- **Logging**: Log entity type with all operations for debugging
+- **Responsive Design**: Ensure UI adapts to different entity types seamlessly
+- **Data Refresh**: Allow refreshing data for current entity without affecting others
+
+### Success Criteria
+
+- User can switch between Application, Product, and Program entities
+- Each entity loads its specific data structure correctly
+- Natural language queries work appropriately for each entity type
+- Metrics and examples update dynamically based on entity selection
+- Filter generation considers entity-specific schema
+- Results display correctly for each entity type
+- Users can download entity-specific filtered results
+- Sample data works for all three entity types
+
+---
+
+## Usage Instructions for GitHub Copilot Agent
+
+Copy this entire prompt and use it with GitHub Copilot Agent:
+
+1. **VS Code Copilot Chat**: 
+   - Open Copilot Chat panel
+   - Use `@workspace /new` command
+   - Paste this prompt
+   - Follow up with: "Create this multi-entity Streamlit application with all specified features"
+
+2. **Copilot Edits**:
+   - Create a new workspace
+   - Open Copilot Edits
+   - Paste this prompt
+   - Let Copilot generate all necessary files including entity processors
+
+3. **Iterative Approach**:
+   - Start with: "Create the base structure with entity selection"
+   - Then: "Add Application entity support"
+   - Then: "Add Product and Program entity support"
+   - Finally: "Integrate OpenAI query processing for all entities"
+
+The agent will generate a complete multi-entity query system with support for Applications, Products, and Programs, each with their own data structure and query capabilities.

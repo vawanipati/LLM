@@ -1,0 +1,195 @@
+You are an expert Python backend + frontend engineer. Build a complete, runnable BM25 Indexing & Retrieval microservice in Python 3.10+ with a companion Streamlit UI. Generate code, configuration, tests, Docker files, and README. Produce code in a standard repo structure. If you create many files, show each file’s filename then its contents.
+
+⸻
+
+Project goal (summary)
+
+Create a FastAPI-based microservice that:
+	•	builds and persists BM25 text indexes (one index per name),
+	•	ingests data from MongoDB and Excel/CSV,
+	•	periodically syncs Mongo changes,
+	•	supports multiple named indexes,
+	•	exposes admin + search REST endpoints,
+	•	and provides a Streamlit UI for search, index management, Excel upload, and status monitoring.
+
+⸻
+
+Tech stack & libs (use these)
+	•	Python 3.10+
+	•	FastAPI + Uvicorn
+	•	Whoosh for on-disk search (or rank_bm25 fallback)
+	•	pymongo for MongoDB
+	•	pandas + openpyxl for Excel/CSV ingestion
+	•	APScheduler for periodic syncs (or FastAPI background tasks)
+	•	python-dotenv for env config
+	•	pydantic for request models
+	•	pytest for unit tests
+	•	Streamlit for the UI
+	•	Dockerfile and docker-compose.yml (optional Mongo service)
+	•	Basic token-based auth (X-API-Key header)
+
+Add Streamlit to requirements.txt.
+
+⸻
+
+Repo structure to produce (create these files)
+	•	README.md
+	•	requirements.txt
+	•	.env.example
+	•	docker-compose.yml
+	•	Dockerfile
+	•	app/main.py (FastAPI bootstrap)
+	•	app/api.py (route definitions)
+	•	app/index_manager.py (core indexing/search logic)
+	•	app/sources.py (Mongo and Excel ingestion)
+	•	app/storage.py (index registry, atomic swaps, metadata)
+	•	app/utils.py (chunking, helpers)
+	•	app/config.py (load config)
+	•	app/ui_streamlit.py (Streamlit UI)
+	•	tests/test_chunking.py
+	•	tests/test_index_flow.py
+	•	scripts/init_db_sample.py (optional sample data)
+	•	scripts/run_local.sh (run commands)
+
+⸻
+
+Streamlit UI — required functionality
+
+Create a app/ui_streamlit.py Streamlit app that interacts with the FastAPI service via HTTP.
+
+UI pages / tabs:
+	1.	Search
+	•	Dropdown to select index (fetched from GET /indices)
+	•	Text input for query
+	•	Top N selector (5/10/20)
+	•	Search button that calls GET /search?index=...&q=...&top=...
+	•	Display results as cards: chunk text, score, source_id, chunk_id, metadata, and a “copy to prompt” button
+	•	Option to select top results and “Ask LLM” (calls configured Chat Completion in backend OR shows how to copy results to LLM prompt). If backend doesn’t integrate LLM, provide guidance in README.
+	2.	Index Management
+	•	List indexes with status (doc_count, last_sync) from GET /indices
+	•	Buttons per index: Sync Now (POST /indices/sync), Rebuild (POST /indices/rebuild), Delete (if implemented)
+	•	Form to create new index from Mongo: fields for mongo_uri, db, collection, query (JSON), chunk_size, overlap, index_name → POST /indices/create
+	•	Form to upload Excel/CSV and create index: file uploader + mapping fields (id_column, text_column, title_column, updated_at_column) → POST /indices/create_from_excel. Show upload progress and success/failure.
+	3.	Index Detail / Explorer
+	•	Click an index to view GET /indices/{name}/status and sample documents (first N chunks)
+	•	Provide ability to download registry metadata or sample export
+	4.	Settings / Admin
+	•	Configure API base URL and X-API-Key (persist locally via Streamlit secrets or config)
+	•	Health check button (GET /health)
+	•	Log view area showing recent actions or response messages from the API
+
+UI UX notes:
+	•	Keep interface responsive and minimal.
+	•	Use Streamlit components (st.selectbox, st.text_area, st.file_uploader, st.dataframe)
+	•	Show helpful error messages if the backend returns non-200.
+	•	If admin endpoints require X-API-Key, add an admin-key input in Settings and attach to requests.
+
+⸻
+
+Required endpoints & behavior (FastAPI)
+
+Admin
+	•	POST /indices/create — create index (payload: index_name, source config for Mongo or Excel details, chunk_size, chunk_overlap). Starts initial build (async) and returns job id or 202.
+	•	POST /indices/rebuild — full rebuild of index (sync immediately).
+	•	POST /indices/sync — incremental sync using updated_at.
+	•	POST /indices/create_from_excel — upload file or provide path & mapping.
+	•	GET /indices — list indexes & metadata (doc_count, last_sync).
+	•	GET /indices/{name}/status — returns status and path.
+
+Search
+	•	GET /search?index=<index>&q=<query>&top=N — return top N chunks with chunk_id, source_id, text, score, meta.
+
+Health
+	•	GET /health — uptime & status.
+
+Admin endpoints require X-API-Key header; search and health are public.
+
+⸻
+
+Indexing & storage rules (as before)
+	•	Index dir: /data/indexes/<index_name>/
+	•	registry.json per index with source_config, last_sync_time, doc_count.
+	•	Chunking: chunk_text(text, chunk_size_words=500, overlap_words=50) with chunk_id <source_id>_c<chunk_idx>.
+	•	Mongo incremental sync uses updated_at. If missing, schedule full rebuilds.
+	•	Atomic swap for rebuilds: build to temp folder and rename.
+	•	Lock during rebuild/sync.
+
+⸻
+
+Search behavior
+	•	Whoosh + BM25 scoring to return top N results and stored metadata. Fallback to rank_bm25 if Whoosh not available.
+
+⸻
+
+Tests & Acceptance Criteria (include UI)
+
+Write pytest tests:
+	•	chunking logic (tests/test_chunking.py)
+	•	index create → search → sync flow (tests/test_index_flow.py)
+
+UI acceptance:
+	•	Streamlit app can:
+	•	list indexes,
+	•	run a search and display results,
+	•	upload Excel and trigger index creation,
+	•	trigger sync now for an index and show updated last_sync.
+Include small end-to-end test instructions in README for UI flows.
+
+⸻
+
+Docker & run
+	•	Provide Dockerfile and docker-compose.yml that can spin up:
+	•	FastAPI service
+	•	MongoDB (optional)
+	•	Optionally, a simple reverse proxy if needed
+	•	Provide scripts/run_local.sh with commands:
+	•	pip install -r requirements.txt
+	•	uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	•	streamlit run app/ui_streamlit.py --server.port 8501
+	•	Document how to run both services together.
+
+⸻
+
+README requirements (update to include UI)
+
+Include:
+	•	Quick start with Docker Compose (service + Mongo)
+	•	How to start FastAPI and Streamlit locally (commands above)
+	•	Example curl commands for admin and search endpoints
+	•	How to use the Streamlit UI (screenshots / description)
+	•	Explanation of chunking, registry, sync flow
+	•	How to run tests
+
+⸻
+
+Implementation notes / constraints for the agent
+	•	Keep code simple and well-commented.
+	•	Use Whoosh by default. If Whoosh is unavailable, fallback to rank_bm25 persisted JSON.
+	•	Keep secrets/config in .env and include .env.example.
+	•	Streamlit UI uses backend endpoints; admin actions require X-API-Key.
+	•	Build index in temp folder and swap atomically.
+
+⸻
+
+Deliver output
+	•	Generate complete files with code, tests, Docker, README, and Streamlit UI.
+	•	If any external choices are required, choose Whoosh and document fallback.
+	•	After code generation, print commands to:
+	1.	pip install -r requirements.txt
+	2.	pytest
+	3.	uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	4.	streamlit run app/ui_streamlit.py --server.port 8501
+	•	Also provide a short post-generation checklist describing:
+	•	how to add a new index,
+	•	how to upload an Excel file,
+	•	how to configure Mongo source,
+	•	how to trigger incremental sync,
+	•	how to query the index via Streamlit and curl.
+
+⸻
+
+Final note
+
+If the agent needs to choose defaults, use:
+	•	Whoosh, chunk_size = 500 words, overlap = 50 words, admin API key env var = ADMIN_API_KEY, default port 8000 for API and 8501 for Streamlit.
+If the agent finishes code generation, also produce brief screenshots or descriptions of the UI layout in README.
